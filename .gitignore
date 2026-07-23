@@ -1,0 +1,54 @@
+﻿# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Large datasets, models, and generated experiment outputs
+data/
+datasets/
+models/
+experiments/
+results/
+tmp/
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+
+# Third-party repositories are restored separately.
+external/*
+!external/README.md
+
+# LaTeX and editor build products
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.texpadtmp
+*.pdf
+*.pre_*.tex
+compiled/
+compiled_clean/
+._*
+.DS_Store
+
+# Local scratch files
+*.tmp
+*.tmp.*
+aihub_zip_list.tmp.txt
+
+# Local Codex/tool state
+.agents/
+.codex/
+.tools/
+
+# Manuscript sources are kept locally, not published with the research code.
+45EDC5BA43BD4CCC93F1F737EEA150AF/
+reproducibility/papertex_env.yml

@@ -1,0 +1,17 @@
+{
+  "name": "aihub_subset_20_boundary_only_lambda_0p8",
+  "frames_root": "experiments/aihub_subset_20_real",
+  "baseline_root": "results/aihub_subset_20/propainter_outputs",
+  "depth_root": "results/aihub_subset_20/da3_depths",
+  "output_root": "results/aihub_subset_20/refined_outputs/boundary_only_sweep/lambda_0p8",
+  "metrics_path": "experiments/02_boundary_refinement/metrics/boundary_only_sweep/lambda_0p8_metrics.csv",
+  "summary_path": "experiments/02_boundary_refinement/metrics/boundary_only_sweep/lambda_0p8_summary.json",
+  "visualization_root": "experiments/02_boundary_refinement/visualizations/boundary_only_sweep/lambda_0p8",
+  "max_clips": 20,
+  "max_frames": 40,
+  "boundary_blur": 7,
+  "max_alpha": 0.8,
+  "tau_rgb": 1000000000.0,
+  "tau_depth": 1000000000.0,
+  "depth_edge_suppression": 0.0
+}

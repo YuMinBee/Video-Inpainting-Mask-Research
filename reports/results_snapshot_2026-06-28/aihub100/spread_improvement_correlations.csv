@@ -1,0 +1,5 @@
+comparison,metric,definition,n,pearson_r,spearman_r,improvement_mean,improvement_median
+Ours-Balanced vs Area-matched dilation for Balanced,ResProxy,ResProxy_baseline - ResProxy_ours,100,-0.06864277818552039,0.003072307230723072,0.006107122749090192,0.0033639818429947177
+Ours-Balanced vs Area-matched dilation for Balanced,BTE,BTE_baseline - BTE_ours,100,0.01292717193514253,0.13830183018301828,0.00012338267872109458,0.00011010328307749923
+Ours-Balanced vs Area-matched distance-only for Balanced,ResProxy,ResProxy_baseline - ResProxy_ours,100,-0.12945815322196427,-0.01804980498049805,0.0031018718332052235,0.0013932883739471713
+Ours-Balanced vs Area-matched distance-only for Balanced,BTE,BTE_baseline - BTE_ours,100,0.03642628103996719,0.04207620762076207,1.6845990903671835e-05,3.5549979656900044e-05
