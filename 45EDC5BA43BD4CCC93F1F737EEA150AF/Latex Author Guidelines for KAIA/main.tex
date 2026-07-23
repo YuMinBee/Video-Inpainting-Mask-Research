@@ -1,0 +1,98 @@
+% @ Copyright of KAIA, written by Sunghun Kang
+%
+% \LaTeX\ Author Guidelines for KAIA - Korean Artificial Intelligence Association
+%
+% Version: 1.0 [2020.07.09]
+
+\documentclass[nouppercase]{kaia}
+\usepackage{amsmath}
+\title{\LaTeX\ Author Guidelines for KAIA}
+
+\author{First Author}{a}
+\author{Second Author}{a}
+\author{Third Author}{b}
+\affiliation{Institution/Department, Affiliation, City, Country, \{test1-1, test1-2\}@ email.com}{a}
+\affiliation{Institution/Department, Affiliation, City, Country, test2@email.com}{b}
+
+
+
+\begin{document}
+
+\maketitle
+\begin{abstract}
+	This document is a model and instructions for \LaTeX. This and the \textit{kaia.cls} file define the components of your paper [title, text, heads, etc.]. The Abstract can have 10-20 lines. Do not use symbols, special characters, footnotes, or math in Paper Title or Abstract.
+\end{abstract}
+\begin{keywords}
+	Deep Learning, Machine Learning
+\end{keywords}
+
+\section{Introduction}
+These are the instructions for preparing papers for the Korea Artificial Intelligence Association (KAIA) Proceedings Series. No other language than English is accepted, and the English should be written in U.S. American English. The papers should be submitted in their final form. The authors must upload their paper in PDF format through the conference management system. 
+
+\section{Guidelines}
+\begin{itemize}
+	\item Do not edit font size or line spacing.
+	\item The number of pages is required between two to eight.
+	\item This template provides three levels of hierarchy sections (e.g., section, subsection, and subsubsection). 
+	\item For references, please use \textit{plain} style as the bibliographystyle such as \cite{smith99}
+	\item The summary of this paper is required for better evaluation. Do not exceed one page length for summary. 
+	\item Both captions for figure and table should be below the their contents.
+\end{itemize}
+
+\section{Some Examples}
+\subsection{Equation}
+\begin{equation}
+\ell = -\sum^M_{c=1} y_{o,c} \log (p_{o,c})	
+\end{equation}
+
+\subsection{Figures}
+\begin{figure}[h]
+\begin{center}
+\fbox{\rule{0pt}{2in} \rule{0.9\linewidth}{0pt}}
+\end{center}
+   \caption{Example of caption for figure.}
+\end{figure}
+
+\subsection{Table}
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{|l|c|}
+\hline
+A & B \\
+\hline\hline
+C & D \\
+E & F \\
+G & H\\
+\hline
+\end{tabular}
+\end{center}
+\caption{Example of caption for table.}
+\end{table}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\newpage
+\newpage
+
+\onecolumn
+	\begin{center}
+		\section*{Summary of this paper}	
+		\setcounter{subsection}{0}
+	\end{center}
+\noindent\fbox{
+    \parbox{\textwidth}{
+    	\begin{quote}
+		\subsection{Problem Setup}
+		\vspace{0.5\baselineskip}
+		\subsection{Novelty}
+		\vspace{0.5\baselineskip}
+		\subsection{Algorithms}
+		\vspace{0.5\baselineskip}
+		\subsection{Experiments}
+		\vspace{0.5\baselineskip}
+		\end{quote}
+    }
+}
+\thispagestyle{empty}
+\end{document}

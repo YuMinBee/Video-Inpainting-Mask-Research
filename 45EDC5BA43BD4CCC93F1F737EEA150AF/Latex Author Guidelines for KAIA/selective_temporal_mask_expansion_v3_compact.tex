@@ -1,0 +1,347 @@
+% Draft paper based on the KAIA LaTeX template.
+
+\documentclass[nouppercase]{kaia}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{array}
+\hypersetup{hidelinks}
+
+\title{Temporal Occupancy Memory for Controllable Mask Refinement in Video Object Removal}
+
+\author{YUMIN BYEON}{a}
+\affiliation{School of Computer Science and Engineering, Yeungnam University, Gyeongsan, Republic of Korea, youmin5317@yu.ac.kr}{a}
+
+\begin{document}
+
+\maketitle
+\begin{abstract}
+Video object removal removes a target object from every frame and fills the missing region with temporally coherent background content. Existing video inpainting models can produce plausible per-frame results, but imperfect or temporally inconsistent masks often lead to object residue, boundary flicker, or unnecessary background changes. This paper studies temporal occupancy memory, a mask-sequence statistic that records how persistently each pixel belongs to the object trajectory over time. We use this memory for controllable mask refinement rather than for aggressive temporal expansion. The proposed two-radius selective temporal mask expansion separates local boundary correction from a wider temporal-union search, adding candidate pixels only when they are supported by temporal occupancy. This creates operating points between conservative boundary-only dilation and temporal union. Experiments on AI-Hub clips and an external DAVIS check show that the balanced setting reduces the residue proxy and boundary temporal error compared with conservative dilation-style baselines, while keeping outside-region changes far below temporal union. Area-matched and distance-only controls further indicate that the gain is not explained by mask size or boundary proximity alone. We also explore an optional occupancy-guided attention bias inside ProPainter, but keep it secondary to the mask-level trade-off. Overall, temporal occupancy memory provides a practical, training-free signal for controlling the trade-off between residue-proxy reduction and background preservation in video object removal.
+\end{abstract}
+
+\begin{keywords}
+Video Inpainting, Object Removal, Mask Refinement, Temporal Occupancy, Temporal Consistency
+\end{keywords}
+
+\section{Introduction}
+Video object removal is a practical video inpainting task in which an unwanted object is removed from a sequence and the missing region is reconstructed from spatial and temporal context. Recent methods such as ProPainter~\cite{zhou2023propainter} have improved propagation and long-range video reasoning, but the final quality still depends strongly on the input masks. If the masks are too small or temporally unstable, object residue can remain near the boundary. If the masks are expanded too aggressively, the inpainting model may unnecessarily alter background content.
+
+This trade-off is especially visible around object boundaries. Boundary-only smoothing or expansion is a conservative choice: it modifies a narrow band around the object and can reduce small boundary artifacts. However, it does not address residue that appears away from the immediate boundary or appears intermittently across frames. A temporal union of the masks is the opposite extreme. It covers pixels that the object occupies at any time in the sequence and therefore improves the residue proxy more, but it can create a large mask that includes valid background regions in many frames. This often causes over-removal artifacts and unnecessary background changes.
+
+This paper studies the following question: can the temporal footprint of the object be used as a compact memory for controlling this trade-off? We define temporal occupancy memory as the per-pixel frequency with which the object mask covers that location over a clip. This memory is weaker than scene geometry and does not require depth or optical flow at inference time, but it captures an important cue: pixels repeatedly occupied by the object trajectory are more likely to be risky source regions and more plausible candidates for additional removal than one-frame mask noise.
+
+The main use of temporal occupancy memory in this paper is hard mask refinement. Instead of directly applying the temporal union, the method uses it as a pool of candidate extra pixels and selects only pixels that are close to the current object mask and sufficiently supported by occupancy memory. We separate a small base dilation, which handles local boundary uncertainty, from a larger temporal-union search radius. Boundary-only dilation is evaluated as a separate conservative baseline, while our method is a two-radius temporal-union selection rule.
+
+We additionally study a soft model-level extension. The same memory is converted into source reliability and used as an additive key bias inside ProPainter attention, discouraging the model from borrowing content from high-occupancy object-trajectory locations. This extension targets boundary temporal stability. It is not presented as a replacement for mask refinement because its effect is source-dependent and secondary to the mask operating-point trade-off.
+
+Our framing differs from depth- or flow-only temporal refinement. We do not claim that a single cue explains all flicker or residue. Instead, we treat temporal occupancy as a lightweight memory whose primary role is to expose a controllable trade-off between residue-like unchanged pixels and background preservation. Accordingly, the main claim of the paper is that temporal occupancy memory provides controllable mask refinement between residue-proxy reduction and background preservation. The secondary claim is that the same memory can also guide source reliability for boundary temporal stability, but this attention-bias extension is not a direct residue-removal mechanism.
+
+The main contributions are as follows:
+\begin{itemize}
+    \item We formulate temporal occupancy memory as a mask-sequence signal for controlling the trade-off between residue-proxy lowering and background preservation.
+    \item We propose selective temporal mask expansion, a training-free and model-agnostic two-radius rule that separates local base dilation from wider occupancy-supported temporal-union search.
+    \item We evaluate the proposed hard-mask formulation on 100 AI-Hub video clips, add a two-radius operating-point grid, and include a 30-clip DAVIS external trade-off check using residue-proxy, outside-change, extra-mask, and boundary temporal-error metrics.
+    \item We add hard-mask ablations, including area-matched dilation, occupancy-only selection, and distance-only selection, to separate the effect of temporal occupancy from mask area and boundary proximity.
+    \item As an optional model-level refinement, we evaluate an occupancy-guided source reliability bias for ProPainter attention on the conservative mask setting.
+\end{itemize}
+
+\section{Related Work}
+\subsection{Video Inpainting and Object Removal}
+Video inpainting reconstructs missing regions across a sequence while maintaining spatial plausibility and temporal coherence. Earlier deep methods jointly modeled temporal structure and spatial details~\cite{wang2018video}, while flow-guided methods propagated information using completed optical flow~\cite{xu2019deep}. Transformer-based approaches further improved long-range correspondence modeling by learning spatial-temporal token interactions~\cite{zeng2020sttn}. Later transformer variants such as FuseFormer~\cite{liu2021fuseformer} and Flow-Guided Transformer~\cite{zhang2022fgt} further improved feature fusion and flow-conditioned token retrieval. End-to-end flow-guided systems such as E$^2$FGVI~\cite{li2022e2fgvi} strengthened the coupling between flow completion and content generation. ProPainter~\cite{zhou2023propainter}, the backend used in our experiments, improves video inpainting using dual-domain propagation and a mask-guided sparse video transformer. These models provide strong reconstruction ability, but their output quality can still be limited by imperfect or temporally inconsistent masks.
+
+\subsection{Mask Quality in Video Object Removal}
+Object removal is often treated as an inpainting problem after a mask has already been produced. In practice, however, the mask is a key part of the system. Promptable segmentation models such as Segment Anything~\cite{kirillov2023segment} make mask acquisition more flexible, but downstream removal still depends on how the masks are adjusted over time. Conservative masks may preserve background but leave object residue. Aggressive masks may reduce residue-like artifacts but change regions that do not need inpainting. This paper focuses on this mask-level trade-off rather than modifying the inpainting network. The proposed selective expansion rule is therefore complementary to stronger inpainting backbones: it changes the spatial-temporal edit support given to the model, not the reconstruction network itself.
+
+\subsection{Temporal Propagation and Memory}
+Optical flow models such as RAFT~\cite{teed2020raft} are widely used for video alignment, propagation, and temporal-error measurement. Flow-based refinement can reduce flicker, but it may be unreliable near occlusion boundaries, fast motion, and thin structures. Memory-based video object segmentation methods such as XMem~\cite{cheng2022xmem} show that compact temporal memory can support long-range object reasoning, although they address segmentation propagation rather than removal-mask budgeting. In contrast, temporal union is a purely mask-level memory: it records all locations occupied by the object at least once. Temporal union can lower the residue proxy aggressively, but it also expands the edit region to many frames where the object is absent. Our temporal occupancy memory keeps the simplicity of temporal union but preserves frequency information, making it possible to distinguish persistent object-trajectory support from isolated mask noise.
+
+\subsection{Attention Bias and Source Reliability}
+Attention-based video inpainting uses token matching to borrow content from spatial and temporal context. In masked video restoration, not all source tokens are equally reliable: tokens that lie on the object trajectory can contain content that should be removed, while background tokens should remain useful sources. Reliability-aware inpainting has also used learnable attention maps to distinguish valid regions from holes and guide feature updates~\cite{xie2019lbam}. Additive attention biases are a natural way to incorporate such reliability information because they adjust attention logits before the softmax~\cite{vaswani2017attention}. The proposed occupancy-guided reliability bias follows this form, but derives the bias from temporal occupancy memory rather than from learned confidence or external depth. This keeps the extension training-free and directly tied to the same signal used by selective mask expansion.
+
+\section{Method}
+\subsection{Problem Setup}
+Let $I_t$ be the input frame at time $t$ and $M_t$ be the original binary object mask. A video inpainting model receives the sequence of frames and masks and produces an output $O_t$. The goal is to improve the input masks so that the final output lowers a residue-like unchanged-pixel proxy while avoiding unnecessary changes outside the target object region.
+
+We compare the following hard-mask strategies:
+\begin{itemize}
+    \item \textbf{Boundary-only}: dilate the raw mask using a fixed local radius.
+    \item \textbf{Temporal union}: use the temporal union mask defined below.
+    \item \textbf{Area-matched dilation}: dilate the raw mask until the extra-mask area matches the corresponding proposed setting as closely as possible. In the main full-set table, this control is matched to Ours-Balanced; in the conservative ablation, it is matched to Ours-Conservative.
+    \item \textbf{Occupancy-only}: select temporal-union pixels by the occupancy threshold without the boundary-distance gate.
+    \item \textbf{Distance-only}: select boundary-near temporal-union pixels without the occupancy threshold.
+    \item \textbf{Ours-Conservative}: the single-radius version of our rule with $r_b=0$, $r_s=10$, and $\tau=0.10$.
+    \item \textbf{Ours-Balanced}: the representative two-radius operating point with $r_b=5$, $r_s=30$, and $\tau=0.15$.
+    \item \textbf{Ours-Aggressive}: a higher-budget two-radius operating point with $r_b=10$, $r_s=50$, and $\tau=0.05$.
+\end{itemize}
+
+\subsection{Temporal Union}
+The temporal union mask is defined as
+\begin{equation}
+    U = \bigcup_{t=1}^{T} M_t.
+\end{equation}
+We refer to the full temporal union simply as temporal union throughout the paper. Using $U$ at every frame can cover object locations across the entire sequence. This is effective for removing residue caused by mask jitter or motion, but it can also be too aggressive. If the object moves across a large area, $U$ may include background regions in frames where the object is absent.
+
+\subsection{Temporal Occupancy Memory}
+Temporal union is binary: a pixel is included if it is occupied at least once. We retain more information by computing temporal occupancy memory,
+\begin{equation}
+    A(x) = \frac{1}{T}\sum_{t=1}^{T} M_t(x).
+\end{equation}
+Here, $A(x) \in [0,1]$ measures how persistently pixel $x$ belongs to the object trajectory. A high value indicates repeated object support over the clip, while a low value indicates a rare or noisy mask event. The main method uses this memory to gate which temporal-union pixels are added to the hard mask. The secondary attention-bias extension converts the same memory into source reliability so that high-occupancy object-trajectory locations are discouraged as keys.
+
+\subsection{Boundary-Only Baseline}
+Boundary-only dilation is used as a local baseline that does not access temporal union or temporal occupancy. Let $\mathcal{D}_r(\cdot)$ denote dilation with radius $r$. The boundary-only mask is
+\begin{equation}
+    M_t^{bnd} = \mathcal{D}_r(M_t).
+\end{equation}
+This baseline is conservative because it expands only the current frame mask. In contrast, the proposed method uses a base dilation only as the local support before selectively adding temporal-union candidates.
+
+\subsection{Selective Temporal Expansion}
+The proposed hard mask refinement is written as a unified two-radius rule. First, a small base dilation handles local boundary uncertainty:
+\begin{equation}
+    M_t^{base} = \mathcal{D}_{r_b}(M_t).
+\end{equation}
+Second, the method searches a wider region around the current mask, but adds only temporal-union pixels that are outside the base mask and sufficiently supported by temporal occupancy memory:
+\begin{equation}
+    S_t =
+    (U \setminus M_t^{base})
+    \cap \mathcal{D}_{r_s}(M_t)
+    \cap \{x \mid A(x) > \tau\}.
+\end{equation}
+The final mask is
+\begin{equation}
+    M_t^{ours} = M_t^{base} \cup S_t.
+\end{equation}
+Here, $r_b$ controls the base boundary correction range for the current-frame mask, $r_s$ controls the wider temporal-union search range, and $\tau$ is the temporal occupancy threshold. We require $r_s>r_b$ so that the search region can include candidates beyond the base dilation. The single-radius version with $r_b=0$ is treated as a conservative variant, while Ours-Balanced uses $r_b=5$, $r_s=30$, and $\tau=0.15$ as a representative operating point. From Eqs.~(4)--(6), the refined mask always contains the base dilation, $\mathcal{D}_{r_b}(M_t) \subseteq M_t^{ours}$, while temporal-union candidates are restricted to the search region $\mathcal{D}_{r_s}(M_t)$ and the occupancy gate. For fixed masks and occupancy memory, the candidate set is monotonically non-decreasing with respect to $r_s$ and monotonically non-increasing with respect to $\tau$. This gives the rule a simple interpretation as a controllable mask-budget family between local dilation and temporal union.
+
+\subsection{Occupancy-Guided Source Reliability Bias}
+After defining the main hard mask-refinement method, we further study a secondary model-level extension that uses the same temporal occupancy memory as a soft source reliability cue inside the video inpainting model. This extension is designed for temporal stability rather than direct residue removal.
+
+Let $C_t(x)$ denote an occupancy-derived confidence map at frame $t$. In our main extension, $C_t(x)$ is the temporal occupancy memory $A(x)$ broadcast to each frame. Since pixels with high occupancy are more likely to belong to the removed object trajectory, they should be less reliable as source keys for reconstructing background content. We therefore define key reliability as
+\begin{equation}
+    R_t(x) = 1 - C_t(x).
+\end{equation}
+The confidence map is downsampled to the transformer feature resolution and used to bias key attention scores. For a query-key attention logit $e_{ij}$, the biased score is
+\begin{equation}
+    e'_{ij} = e_{ij} + \lambda \log(R_j + \epsilon),
+\end{equation}
+where $R_j$ is the reliability of the key token, $\lambda$ controls the bias strength, and $\epsilon$ avoids numerical instability. This penalizes keys located in high-occupancy object regions while leaving reliable background keys relatively unchanged.
+
+We evaluate four sanity controls to verify that the gain comes from the intended occupancy direction rather than from adding an arbitrary attention bias. The controls are: $R=1-\mathrm{occupancy}$, $R=\mathrm{occupancy}$, random reliability, and uniform reliability. A uniform reliability map should be equivalent to the baseline because it adds the same constant to all key logits before the softmax.
+
+\section{Evaluation Metrics}
+We evaluate mask strategies through the final ProPainter output rather than mask geometry alone. The following metrics are computed per frame and averaged.
+
+\subsection{Boundary Temporal Error}
+Boundary temporal error measures flicker near the object boundary. We estimate optical flow between adjacent original frames, warp the previous output to the current frame, and compute the temporal difference inside the boundary band:
+\begin{equation}
+    \text{BTE} =
+    \frac{1}{T-1}\sum_{t=2}^{T}\frac{1}{|B_t|}
+    \sum_{x \in B_t} \left|O_t(x)-\mathcal{W}(O_{t-1})(x)\right|.
+\end{equation}
+Lower values indicate better temporal stability near the boundary.
+
+\subsection{Outside Changed}
+Outside changed measures the fraction of non-object pixels whose output differs from the original input by more than a threshold:
+\begin{equation}
+    \text{Outside} =
+    \frac{|\{x \notin M_t : |O_t(x)-I_t(x)| > \delta\}|}{|\{x : x \notin M_t\}|}.
+\end{equation}
+This is a proxy for over-removal. We use $\delta=10$ in RGB intensity units.
+
+\subsection{Extra Mask Ratio and Residue Proxy}
+The extra mask ratio measures how much additional mask area is introduced relative to the original mask:
+\begin{equation}
+    \text{Extra} = \frac{|M_t^{variant} - M_t|}{|M_t|}.
+\end{equation}
+For residue-like artifacts, we use an output-input similarity proxy inside the original mask:
+\begin{equation}
+    \text{ResidueProxy} =
+    \frac{|\{x \in M_t : |O_t(x)-I_t(x)| \leq \delta\}|}{|M_t|}.
+\end{equation}
+Lower values suggest that fewer original object pixels remain visually similar to the input.
+
+\section{Experiments}
+\subsection{Datasets}
+The main experiment uses 100 clips from the AI-Hub Video Data for Inpainting Automation dataset~\cite{aihub}. These clips contain diverse object categories, indoor/outdoor scenes, and temporally varying masks. The set contains 3973 evaluated frames. We additionally include a 30-clip DAVIS 2017 validation check~\cite{pont2017davis}, for a total of 1999 evaluated frames, as an external trade-off sanity check rather than as a native object-removal benchmark. This check includes the same Ours-Balanced operating point used in the main AI-Hub table.
+
+\subsection{Implementation Details}
+All methods use ProPainter as the inpainting backend. We generate a separate inpainting result for each mask variant. Boundary temporal error is computed using dense optical flow estimated from adjacent original frames. Unless otherwise stated, outside-change and residue-proxy metrics use an RGB difference threshold of $\delta=10$. The representative full-set operating point is Ours-Balanced with $r_b=5$, $r_s=30$, and $\tau=0.15$. We also report Ours-Conservative, the single-radius variant with $r_b=0$, as a lower-budget ablation and as the mask setting used for the optional attention-bias comparison.
+
+\section{Results}
+\subsection{Full-Set AI-Hub Results}
+Table~\ref{tab:driving} reports the main 100-clip AI-Hub result. The proposed method does not dominate all metrics simultaneously. Instead, it creates controllable operating points between boundary-only dilation and temporal union. The goal is not to minimize the residue proxy alone, since temporal union and occupancy-only can do so by spending a much larger mask budget. Instead, the proposed setting aims to reduce the residue proxy under a controlled outside-change and extra-mask budget. Ours-Balanced, with $r_b=5$, $r_s=30$, and $\tau=0.15$, is the representative operating point: it improves BTE and the residue proxy over boundary-only and Ours-Conservative, while keeping Outside much closer to the conservative baselines than to temporal union. The Ours-Balanced area-matched dilation and area-matched distance-only baselines have nearly identical Extra, but Ours-Balanced obtains lower BTE and residue proxy, showing that the result is not explained by mask area or boundary proximity alone.
+
+\begin{table*}[t]
+\begin{center}
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.12}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{|l|l|c|c|c|c|}
+\hline
+Method & Role & BTE $\downarrow$ & Outside $\downarrow$ & Extra $\downarrow$ & Res. proxy $\downarrow$ \\
+\hline\hline
+Boundary-only & Conservative baseline & 0.017147 & 0.061762 & 0.1041 & 0.4154 \\
+Temporal union & Aggressive baseline & 0.015304 & 0.276760 & 3.6329 & 0.1465 \\
+Ours-Conservative & $r_b=0$ lower-budget ablation & 0.016681 & 0.063104 & 0.1347 & 0.4116 \\
+\textbf{Ours-Balanced} & \textbf{$r_b=5$, $r_s=30$, $\tau=0.15$} & \textbf{0.015917} & \textbf{0.068664} & \textbf{0.3232} & \textbf{0.3967} \\
+Area-matched dilation (Balanced) & Matches Ours-Balanced Extra & 0.016041 & 0.067745 & 0.3232 & 0.4028 \\
+Area-matched distance-only (Balanced) & No occupancy, matched Extra & 0.015933 & 0.068122 & 0.3226 & 0.3998 \\
+Distance-only & Occupancy gate removed & 0.016598 & 0.063611 & 0.1999 & 0.4098 \\
+Occupancy-only & Distance gate removed & 0.014486 & 0.176602 & 1.6430 & 0.2110 \\
+\hline
+\end{tabular}
+}
+\end{center}
+\caption{Main full-set comparison on 100 AI-Hub clips. Ours-Balanced is the representative proposed setting. The area-matched dilation and area-matched distance-only controls are matched to Ours-Balanced, not to the conservative variant. The table should be read as mask-expansion budget control rather than as a claim that one method dominates every metric. ``Res. proxy'' is the output-input similarity proxy inside the original mask, not a direct human residue score.}
+\label{tab:driving}
+\end{table*}
+
+\subsection{Two-Radius Grid Check}
+Table~\ref{tab:grid} reports the 10-clip grid used to select and interpret the two-radius operating points. It shows the same direction as the full-set result: increasing the mask budget improves BTE and the residue proxy, but increases Outside and Extra. Ours-Aggressive is therefore retained as a higher-budget reference rather than the default setting.
+
+\begin{table}[h]
+\begin{center}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+Method & BTE $\downarrow$ & Outside $\downarrow$ & Extra $\downarrow$ & Res. proxy $\downarrow$ \\
+\hline\hline
+Boundary-only & 0.021926 & 0.034177 & 0.160544 & 0.397152 \\
+Temporal union & 0.016408 & 0.241770 & 6.031051 & 0.156844 \\
+Ours-Conservative & 0.021458 & 0.034785 & 0.213239 & 0.392504 \\
+Ours-Balanced & 0.020469 & 0.037697 & 0.475537 & 0.377882 \\
+Ours-Aggressive & 0.019742 & 0.044764 & 0.993442 & 0.364720 \\
+\hline
+\end{tabular}
+}
+\end{center}
+\caption{Two-radius operating-point grid on 10 AI-Hub clips. Ours-Balanced is the selected representative setting; Ours-Aggressive illustrates the higher-budget end of the same continuum.}
+\label{tab:grid}
+\end{table}
+\subsection{External DAVIS Trade-Off Check}
+Table~\ref{tab:davis} reports an external trade-off check on 30 DAVIS 2017 validation clips. DAVIS is not a native object-removal benchmark, so this table is used to test whether the same mask-budget continuum appears outside the AI-Hub clips. The pattern is consistent: Temporal union gives the lowest residue proxy and BTE, but greatly increases Outside and Extra. Ours-Balanced improves BTE and the residue proxy over Ours-Conservative by spending more mask area, while keeping Outside and Extra far below temporal union.
+
+\begin{table}[h]
+\begin{center}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+Method & BTE $\downarrow$ & Outside $\downarrow$ & Extra $\downarrow$ & Res. proxy $\downarrow$ \\
+\hline\hline
+Boundary-only & 0.041052 & 0.014502 & 0.3402 & 0.0622 \\
+Temporal union & 0.034280 & 0.162643 & 4.6084 & 0.0577 \\
+Area-matched dilation & 0.040880 & 0.017024 & 0.3668 & 0.0611 \\
+Ours-Conservative & 0.040853 & 0.017478 & 0.3636 & 0.0619 \\
+\textbf{Ours-Balanced} & 0.038699 & 0.030683 & 0.8370 & 0.0605 \\
+\hline
+\end{tabular}
+}
+\end{center}
+\caption{External trade-off check on 30 DAVIS 2017 validation clips. DAVIS is not a native object-removal benchmark; the table checks whether the same operating-point behavior appears outside AI-Hub. Ours-Balanced uses $r_b=5$, $r_s=30$, and $\tau=0.15$, matching the representative setting in the main AI-Hub table.}
+\label{tab:davis}
+\end{table}
+\subsection{Hard Mask Ablation}
+The ablation separates mask budget, boundary proximity, and temporal occupancy effects. The most direct controls are the balanced-budget baselines: Ours-Balanced has nearly the same Extra as area-matched dilation and area-matched distance-only, but achieves lower BTE and residue proxy in the mean table and wins the residue proxy in 93/100 and 74/100 clips, respectively. This indicates that the result is not explained by adding more mask area or by using boundary-near temporal-union pixels alone. Occupancy-only and temporal union further show the opposite extreme: they can lower the residue proxy more aggressively, but they spend much larger outside-change and extra-mask budgets. Finally, Ours-Conservative is retained as a low-budget ablation that stays close to boundary-only dilation while testing the single-radius version of the same occupancy-based selection rule.
+
+Figure~\ref{fig:pareto} visualizes the same outside/residue-proxy trade-off. The top panel shows the global trade-off, where temporal union and occupancy-only reduce the residue proxy by spending much larger outside-change budgets. The bottom panel zooms into the conservative cluster. Ours-Balanced moves away from this low-budget region to reduce the residue proxy, while still remaining far below temporal union in outside change.
+
+\begin{figure}[h]
+\begin{center}
+\includegraphics[width=\linewidth]{../../experiments/4090_rerun/aihub_subset_100/hard_ablation/evaluation/hard_ablation_outside_residue_pareto.png}
+\end{center}
+\caption{Outside/residue-proxy trade-off on the 100-clip AI-Hub set. The top panel shows the global trade-off, where temporal union and occupancy-only reduce the residue proxy by spending much larger outside-change budgets. The bottom panel zooms into the conservative cluster. Ours-Balanced moves away from this low-budget region to reduce the residue proxy, while still remaining far below temporal union in outside change.}
+\label{fig:pareto}
+\end{figure}
+
+\subsection{Clip-Level Win Counts}
+Mean scores can hide whether the behavior is consistent across clips. Table~\ref{tab:wincount} reports clip-level win counts for Ours-Balanced, where each entry counts clips in which Ours-Balanced has a lower value than the comparison method. Ours-Balanced wins the residue proxy on all clips against Boundary-only and Ours-Conservative, while rarely winning Outside or Extra against these lower-budget settings. Against Temporal union, it wins Outside in 98/100 clips and Extra in 99/100 clips, but wins the residue proxy in only 3/100 clips. Most importantly, against balanced-budget controls, Ours-Balanced wins the residue proxy in 93/100 clips over area-matched dilation and in 74/100 clips over area-matched distance-only. This supports the claim that the gain is not explained by mask area or boundary proximity alone.
+
+\begin{table*}[t]
+\begin{center}
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.12}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+Comparison & BTE win & Outside win & Res. proxy win & Extra win & Outside+Res. win \\
+\hline\hline
+vs Boundary-only & 96/100 & 2/100 & 100/100 & 0/100 & 2/100 \\
+vs Ours-Conservative & 95/100 & 3/100 & 100/100 & 0/100 & 3/100 \\
+vs Temporal union & 51/100 & 98/100 & 3/100 & 99/100 & 1/100 \\
+vs Balanced area-matched dilation & 75/100 & 27/100 & 93/100 & 46/100 & 24/100 \\
+vs Balanced area-matched distance-only & 55/100 & 27/100 & 74/100 & 0/100 & 17/100 \\
+\hline
+\end{tabular}
+}
+\end{center}
+\caption{Clip-level win counts for Ours-Balanced on the 100-clip AI-Hub set. Each cell counts clips where Ours-Balanced has a lower metric value than the comparison method. ``Outside+Res.'' requires both outside changed and residue proxy to be lower in the same clip.}
+\label{tab:wincount}
+\end{table*}
+\subsection{Optional Attention-Bias Sanity Check}
+We evaluate the attention-bias extension on the conservative proposed mask as an optional model-level refinement. Table~\ref{tab:reliability_sanity} reports a 10-clip sanity check with $\lambda=4$. The intended reliability direction, $R=1-\mathrm{occupancy}$, improves BTE and Outside over the baseline. Reversing the direction to $R=\mathrm{occupancy}$ strongly worsens BTE and Outside, which indicates that high-occupancy object regions should be penalized rather than trusted as reliable source keys. Random reliability does not reproduce the same gain, and uniform reliability exactly matches the baseline, as expected from the softmax invariance to a constant logit shift.
+
+\begin{table}[h]
+\begin{center}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+Method & BTE $\downarrow$ & Outside $\downarrow$ & Res. proxy $\downarrow$ & BTE wins & Outside wins \\
+\hline\hline
+Baseline & 0.014639 & 0.103393 & 0.254397 & -- & -- \\
+$R=1-\mathrm{occupancy}$ & 0.012225 & 0.101402 & 0.258517 & 10/10 & 7/10 \\
+$R=\mathrm{occupancy}$ & 0.024642 & 0.128939 & 0.167859 & 0/10 & 0/10 \\
+$R=\mathrm{random}$ & 0.014660 & 0.102459 & 0.260114 & 4/10 & 4/10 \\
+$R=\mathrm{uniform}$ & 0.014639 & 0.103393 & 0.254397 & 0/10 & 0/10 \\
+\hline
+\end{tabular}
+}
+\end{center}
+\caption{Reliability-bias sanity check on 10 AI-Hub clips. The baseline denotes the corresponding preprocessing-only output on the 10-clip attention sanity subset. The useful direction is $R=1-\mathrm{occupancy}$; reversing the direction hurts BTE and Outside, random reliability is inconsistent, and uniform reliability reduces to the baseline.}
+\label{tab:reliability_sanity}
+\end{table}
+
+
+\subsection{Residue Proxy Interpretation}
+The residue-related metric in this paper is an output-input similarity proxy inside the original object mask. It should not be read as a perfect detector of semantic object residue or as a substitute for human perception. For this reason, the result text reports ``residue proxy'' rather than claiming that a method directly removes all visible object residue. The metric is still useful for controlled comparisons because all variants are evaluated with the same input frames, masks, threshold, and ProPainter backend. In the hard-mask ablation, lower residue-proxy values generally indicate that fewer original-mask pixels remain close to the input, while outside changed and extra-mask ratio indicate the background-preservation cost of achieving that change.
+The proposed mask refinement is training-free and model-agnostic, requiring only binary-mask operations; optical flow is used only for evaluation.
+
+
+\subsection{Qualitative Results}
+Figure~\ref{fig:cases} shows qualitative mask-expansion cases using the same naming as the main quantitative table. Each panel compares Input+mask, Boundary-only, Temporal union, Ours-Conservative, and Ours-Balanced. The first case shows the intended balanced behavior, while the second shows a temporal-union over-removal case where using the full union changes too much background.
+
+\begin{figure*}[t]
+\begin{center}
+\includegraphics[width=\linewidth]{../../experiments/paper_visualizations/case_panels_balanced/01_success_driving_I-210715_I03012_W06_frame_0016_crop.png}
+\includegraphics[width=\linewidth]{../../experiments/paper_visualizations/case_panels_balanced/03_temporal_union_failure_I-210618_I01001_W01_frame_0011_crop.png}
+\end{center}
+\caption{Representative mask-expansion cases with columns Input+mask, Boundary-only, Temporal union, Ours-Conservative, and Ours-Balanced. From top to bottom: AI-Hub success and temporal-union over-removal. Each panel compares outputs in the top strip and visualizes output-input change heatmaps in the bottom strip, making the residue-proxy/over-removal trade-off visible.}
+\label{fig:cases}
+\end{figure*}
+\section{Ablation and Discussion}
+The hard-mask ablation compares the main mask families and three controls for the proposed selection rule. Boundary-only dilation tests conservative local expansion, temporal union tests full temporal expansion, area-matched dilation controls for mask area, occupancy-only removes the distance gate, and distance-only removes the occupancy gate. The balanced-budget controls are especially important: Ours-Balanced has nearly the same mean extra-mask ratio as the area-matched dilation and area-matched distance-only baselines, but wins the residue proxy in 93/100 and 74/100 clips, respectively. Thus, the result is not explained by mask size or boundary proximity alone.
+
+The proposed method does not dominate all metrics simultaneously. Instead, it creates controllable operating points between boundary-only dilation and temporal union. This is the central interpretation of the method: it is not a highest-score method on every metric, but a mask-expansion budget controller. Temporal union and occupancy-only can improve the residue proxy more aggressively, but they also change background regions much more often. Ours-Conservative stays near the low-outside region, Ours-Balanced spends more mask area to improve BTE and the residue proxy, and Ours-Aggressive shows the higher-budget end of the same continuum. The proposed method is therefore useful when the application requires choosing an operating point between background preservation and residue-proxy reduction.
+The attention-bias extension is deliberately kept secondary. The sanity check shows that the intended reliability direction, $R=1-\mathrm{occupancy}$, improves boundary stability on the 10-clip subset, while reversed, random, and uniform controls do not provide the same interpretation. Therefore, attention bias should be read as optional model-level guidance rather than as an independent replacement for mask operating-point control.
+
+\section{Limitations}
+The method has several limitations. First, temporal occupancy memory is a mask-level cue and does not understand scene geometry, appearance, or occlusion. If the object covers a broad area over time, the selected extra region can still become too large. Second, the residue-proxy metric is based on output-input similarity inside the original mask; it may not perfectly match human perception. Third, the attention-bias extension is evaluated only as a compact sanity check and should be interpreted as soft source guidance on top of mask expansion rather than as a replacement for mask selection. Finally, the experimental comparison requires rerunning the inpainting model for each mask or attention variant, although deployment uses only the selected operating point.
+
+\section{Conclusion}
+This paper proposed temporal occupancy memory for controllable mask refinement in video object removal. The main contribution is selective temporal mask expansion: a small base dilation handles local boundary uncertainty, and a larger search radius selects temporal-union pixels only when they are supported by occupancy memory. This produces a controllable trade-off between residue-proxy lowering and background preservation. Experiments show that Ours-Balanced is a practical full-set operating point: it improves BTE and the residue proxy over conservative dilation-style settings while keeping outside-region changes far below temporal union. The 10-clip two-radius grid further shows how the same rule can move toward a higher-budget operating point when stronger residue-proxy reduction is desired. As an optional extension, we also show that the same memory can define a source reliability bias inside ProPainter attention, but this remains secondary to the mask-level operating-point control. Overall, temporal occupancy memory is a practical, training-free signal for mask-level trade-off control, with optional model-level guidance for boundary temporal stability.
+
+\clearpage
+\bibliography{depth_aware_temporal_refinement_refs}
+
+\end{document}
+
+
+
+
+
+
+
+
+
+

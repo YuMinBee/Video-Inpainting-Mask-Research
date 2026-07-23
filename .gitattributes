@@ -1,0 +1,18 @@
+* text=auto
+*.py text eol=lf
+*.ps1 text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.tex text eol=lf
+*.bib text eol=lf
+*.csv text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+
+# Preserve upstream/template whitespace while still checking project content.
+*.bst whitespace=-trailing-space
+*.cls whitespace=-trailing-space
+*.tex whitespace=-trailing-space,-space-before-tab,-blank-at-eof
+*.py whitespace=-blank-at-eof
+*.ps1 whitespace=-blank-at-eof
+PROJECT_STRUCTURE.md whitespace=-blank-at-eof

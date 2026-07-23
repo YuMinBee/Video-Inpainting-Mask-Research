@@ -1,0 +1,17 @@
+{
+  "name": "probe_depth_aware_boundary_refinement",
+  "frames_root": "experiments/depth_temporal_probe",
+  "baseline_root": "results/propainter_outputs",
+  "depth_root": "results/da3_depths",
+  "output_root": "results/refined_outputs/probe_depth_aware",
+  "metrics_path": "experiments/02_boundary_refinement/metrics/probe_depth_aware_metrics.csv",
+  "summary_path": "experiments/02_boundary_refinement/metrics/probe_depth_aware_summary.json",
+  "visualization_root": "experiments/02_boundary_refinement/visualizations/probe_depth_aware",
+  "max_clips": 3,
+  "max_frames": 20,
+  "boundary_blur": 7,
+  "max_alpha": 0.65,
+  "tau_rgb": 0.08,
+  "tau_depth": 0.12,
+  "depth_edge_suppression": 0.65
+}

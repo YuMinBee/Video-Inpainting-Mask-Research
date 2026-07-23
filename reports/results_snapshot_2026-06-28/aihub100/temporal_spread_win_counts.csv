@@ -1,0 +1,16 @@
+group,comparison,clips,BTE win,Outside win,Extra win,ResProxy win,Outside+ResProxy win
+low,Ours-Balanced vs Boundary-only,34,33,1,0,34,1
+low,Ours-Balanced vs Ours-Conservative,34,26,32,32,3,1
+low,Ours-Balanced vs Temporal union,34,26,32,33,3,1
+low,Ours-Balanced vs Area-matched dilation for Balanced,34,23,7,12,31,7
+low,Ours-Balanced vs Area-matched distance-only for Balanced,34,20,9,0,24,5
+mid,Ours-Balanced vs Boundary-only,33,33,0,0,33,0
+mid,Ours-Balanced vs Ours-Conservative,33,16,33,33,0,0
+mid,Ours-Balanced vs Temporal union,33,16,33,33,0,0
+mid,Ours-Balanced vs Area-matched dilation for Balanced,33,23,10,18,32,9
+mid,Ours-Balanced vs Area-matched distance-only for Balanced,33,13,10,0,26,7
+high,Ours-Balanced vs Boundary-only,33,30,1,0,33,1
+high,Ours-Balanced vs Ours-Conservative,33,2,32,33,0,0
+high,Ours-Balanced vs Temporal union,33,9,33,33,0,0
+high,Ours-Balanced vs Area-matched dilation for Balanced,33,29,10,16,30,8
+high,Ours-Balanced vs Area-matched distance-only for Balanced,33,22,8,0,24,5

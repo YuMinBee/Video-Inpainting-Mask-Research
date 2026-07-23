@@ -1,0 +1,221 @@
+% Draft paper based on the KAIA LaTeX template.
+
+\documentclass[nouppercase]{kaia}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\title{Depth-Aware Boundary Refinement for Temporally Stable Video Object Removal}
+
+\author{First Author}{a}
+\author{Second Author}{a}
+\affiliation{Department of Artificial Intelligence, Institution Name, City, Republic of Korea, \{first.author, second.author\}@example.com}{a}
+
+\begin{document}
+
+\maketitle
+\begin{abstract}
+Video object removal aims to fill masked regions with visually plausible content while preserving temporal coherence across frames. Recent video inpainting methods can produce high-quality appearance reconstruction, but temporal artifacts often remain around object mask boundaries, where small frame-to-frame inconsistencies become visible as flicker. Our preliminary analysis shows that temporal error overlaps with mask boundaries, while depth edges only partially coincide with flickering regions. This suggests that depth discontinuity alone does not explain temporal flicker. Instead, pseudo-depth can be used as a structural reliability cue for deciding when temporal boundary refinement should be trusted. This paper proposes a depth-aware boundary refinement module that uses pseudo-depth consistency and depth-edge preservation to control flow-based temporal blending. Given baseline inpainting results from ProPainter, pseudo-depth maps estimated by Depth Anything 3, and optical flow estimated by RAFT, the proposed method warps the previous refined frame to the current frame and blends it with the current result using RGB consistency, depth consistency, flow reliability, and a mask-boundary weight. Strong depth discontinuities suppress blending so that real scene boundaries are less likely to be over-smoothed. The method does not require ground-truth depth or additional training, and can be applied as a post-processing module to existing video object removal pipelines.
+\end{abstract}
+
+\begin{keywords}
+Video Inpainting, Object Removal, Temporal Consistency, Pseudo-Depth, Optical Flow
+\end{keywords}
+
+\section{Introduction}
+Video object removal is a practical form of video inpainting in which unwanted objects are removed and the missing regions are reconstructed from the surrounding spatial and temporal context. Although recent models such as ProPainter~\cite{zhou2023propainter} have significantly improved visual quality by combining propagation and transformer-based reasoning, temporal artifacts remain a persistent problem. These artifacts are especially visible around mask boundaries, thin structures, and occlusion boundaries, where a small inconsistency between adjacent frames can appear as flickering or jittering.
+
+Most existing video inpainting pipelines rely heavily on RGB appearance matching and optical-flow-based propagation. This design is natural because optical flow provides dense correspondences between adjacent frames. However, flow estimates are often unreliable near disocclusion and depth discontinuity. In these regions, pixels that are close in the image plane may belong to different surfaces in 3D space, and a propagation decision based only on appearance can blend content from the wrong surface. As a result, the inpainted region may be visually plausible in each single frame but temporally unstable across the sequence.
+
+This paper explores the use of pseudo-depth as an additional reliability signal for temporal refinement. Recent monocular and multi-view depth foundation models, including Depth Anything~\cite{yang2024depthanything} and Depth Anything 3~\cite{lin2025depthanything3}, provide strong zero-shot depth estimates without requiring depth labels for the target video. We do not assume that depth edges directly explain all flicker. Instead, we treat pseudo-depth as a structural cue that helps decide where temporal propagation should be encouraged, suppressed, or made conservative.
+
+We propose a post-processing module that refines baseline video object removal results using depth-aware boundary confidence. The module first estimates optical flow between adjacent frames and warps the previous refined output to the current frame. It then computes a blending weight from RGB consistency, pseudo-depth consistency, flow reliability, and a mask-boundary prior. If the warped previous result is consistent with the current result in both appearance and depth, it is used to stabilize the current frame. If depth consistency is low or the current region is a strong depth edge, the module suppresses temporal blending to avoid blurring true geometric boundaries.
+
+The main contributions of this draft are as follows:
+\begin{itemize}
+    \item We show that temporal error frequently overlaps with object mask boundaries, while depth edges only partially explain the observed flicker.
+    \item We propose a training-free depth-aware boundary refinement module that combines RGB consistency, pseudo-depth consistency, depth-edge preservation, flow reliability, and boundary weighting.
+    \item We outline an evaluation protocol on AI-Hub video inpainting data to analyze how pseudo-depth cues can guide temporal refinement without treating depth edges as the sole cause of flicker.
+    \item We define boundary-focused temporal metrics for measuring flicker reduction in regions where object removal artifacts are most visible.
+\end{itemize}
+
+\section{Related Work}
+\subsection{Video Inpainting and Object Removal}
+Video inpainting reconstructs missing regions in a sequence while maintaining spatial plausibility and temporal coherence. Earlier deep methods considered temporal structure and spatial details jointly~\cite{wang2018video}, while flow-guided approaches explicitly propagated pixels using completed optical flow~\cite{xu2019deep}. ProPainter~\cite{zhou2023propainter} improves video inpainting with dual-domain propagation and a mask-guided sparse video transformer. Despite these advances, temporal coherence can still degrade around boundaries where correspondence estimation is difficult.
+
+\subsection{Optical Flow for Temporal Propagation}
+Optical flow is widely used for temporal alignment in video restoration and inpainting. RAFT~\cite{teed2020raft} estimates flow through recurrent updates over all-pairs correlation volumes and has become a common choice for robust dense correspondence. However, even strong flow models can be uncertain near occlusion, fast motion, and thin structures. These errors can be amplified when warped frames are blended without geometric reliability checks.
+
+\subsection{Pseudo-Depth Estimation}
+Monocular depth estimation has recently benefited from large-scale training and foundation models. Depth Anything~\cite{yang2024depthanything} improves zero-shot generalization by using large-scale unlabeled data and teacher-generated supervision. Depth Anything 3~\cite{lin2025depthanything3} extends this direction toward geometry recovery from arbitrary visual inputs and can produce spatially consistent geometry across views. In this work, pseudo-depth is not used as ground truth geometry. Instead, it is used as a relative structural cue for deciding whether temporal propagation is reliable.
+
+\section{Problem Formulation}
+Let $I_t$ be the original frame at time $t$, $M_t$ the binary object mask, and $B_t$ the baseline inpainting result generated by a video object removal model. The goal is to produce a refined result $R_t$ that preserves the spatial quality of $B_t$ while reducing temporal flicker near the removed object boundary.
+
+We assume that pseudo-depth $D_t$ is estimated from each frame or from the full sequence, and that optical flow $F_{t-1 \rightarrow t}$ maps pixels from frame $t-1$ to frame $t$. The previous refined output is warped to the current frame:
+\begin{equation}
+    W_t = \mathcal{W}(R_{t-1}, F_{t-1 \rightarrow t}),
+\end{equation}
+where $\mathcal{W}$ denotes differentiable backward warping or an equivalent image warping operation.
+
+A naive temporal refinement can blend $W_t$ and $B_t$ using appearance similarity. However, this can fail when RGB similarity is high but the warped pixels come from a different depth layer, or when a true scene boundary should be preserved rather than smoothed. We therefore introduce pseudo-depth consistency and depth-edge preservation into the temporal confidence.
+
+\section{Proposed Method}
+\subsection{Pipeline Overview}
+The proposed pipeline consists of five stages. First, ProPainter generates baseline object removal results. Second, Depth Anything 3 estimates pseudo-depth maps either frame by frame or at the sequence level. Third, RAFT estimates forward and backward optical flow between adjacent frames. Fourth, the previous refined result is warped to the current frame. Finally, a confidence map determines how much of the warped result should be blended into the current baseline output near the object boundary.
+
+\subsection{Depth Normalization}
+Pseudo-depth values may have arbitrary scale and shift, especially when estimated frame by frame. Before computing depth consistency, we normalize depth using robust sequence-level statistics:
+\begin{equation}
+    \hat{D}_t = \frac{D_t - p_5(D)}{p_{95}(D) - p_5(D) + \epsilon},
+\end{equation}
+where $p_5(D)$ and $p_{95}(D)$ are the fifth and ninety-fifth percentiles computed over the sequence or over a stable subset of frames. This normalization preserves relative depth ordering while reducing the effect of outliers.
+
+\subsection{Consistency Terms}
+The RGB consistency between the current baseline result and the warped previous refined result is defined as
+\begin{equation}
+    C^{rgb}_t(x) = \exp\left(-\frac{\lVert B_t(x)-W_t(x) \rVert_1}{\tau_{rgb}}\right).
+\end{equation}
+
+The depth consistency compares the current pseudo-depth with the warped previous pseudo-depth:
+\begin{equation}
+    C^{dep}_t(x) = \exp\left(-\frac{|\hat{D}_t(x)-\mathcal{W}(\hat{D}_{t-1}, F_{t-1 \rightarrow t})(x)|}{\tau_d}\right).
+\end{equation}
+
+When backward flow is available, a flow reliability term is computed by forward-backward consistency:
+\begin{equation}
+    \begin{aligned}
+    C^{flow}_t(x) = \mathbb{1}\big(&\lVert F_{t-1 \rightarrow t}(x) \\
+    &+ \mathcal{W}(F_{t \rightarrow t-1}, F_{t-1 \rightarrow t})(x) \rVert_2 < \tau_f\big).
+    \end{aligned}
+\end{equation}
+This term suppresses propagation in likely occluded or mismatched regions.
+
+\subsection{Depth-Edge Preservation}
+Depth consistency decides whether the warped previous frame is geometrically compatible with the current frame. In addition, strong depth gradients indicate likely real scene boundaries. We therefore compute a depth-edge strength map:
+\begin{equation}
+    G^{dep}_t(x) = \text{norm}\left(\lVert \nabla \hat{D}_t(x) \rVert_1\right),
+\end{equation}
+where $\text{norm}(\cdot)$ denotes robust normalization to $[0,1]$. Instead of interpreting $G^{dep}_t$ as a flicker cause, we use it as a preservation cue:
+\begin{equation}
+    P^{edge}_t(x) = 1 - \gamma G^{dep}_t(x).
+\end{equation}
+This term reduces temporal blending on strong depth discontinuities, helping the refinement avoid over-smoothing real boundaries.
+
+\subsection{Boundary-Aware Blending}
+Temporal artifacts are most visible near mask boundaries. We therefore construct a boundary band:
+\begin{equation}
+    E_t = \text{dilate}(M_t, k) - \text{erode}(M_t, k),
+\end{equation}
+where $k$ controls the width of the boundary region. The final blending confidence is
+\begin{equation}
+    \alpha_t(x) = \lambda E_t(x) C^{rgb}_t(x) C^{dep}_t(x) C^{flow}_t(x) P^{edge}_t(x).
+\end{equation}
+
+The refined frame is then obtained by
+\begin{equation}
+    R_t(x) = \alpha_t(x) W_t(x) + (1-\alpha_t(x))B_t(x).
+\end{equation}
+For the first frame, $R_1=B_1$. The module can be applied forward only, or in a forward-backward pass followed by averaging to reduce directional bias.
+
+\section{Boundary, Depth Edge, and Flicker Analysis}
+Before evaluating the refinement module, we analyze how mask boundaries, depth edges, and temporal errors overlap. The goal is not to prove that depth edges explain flicker. Instead, the analysis checks whether pseudo-depth provides useful structural information near the regions where flicker is most visible. For each sequence, we compute a depth boundary score around the mask boundary:
+\begin{equation}
+    S^{dep} = \frac{1}{T}\sum_t \frac{1}{|E_t|}\sum_{x \in E_t} \lVert \nabla \hat{D}_t(x) \rVert_1.
+\end{equation}
+
+We also compute a baseline boundary flicker score:
+\begin{equation}
+    \begin{aligned}
+    S^{flicker} = \frac{1}{T-1}\sum_{t=2}^{T} \frac{1}{|E_t|}
+    \sum_{x \in E_t} &\lVert B_t(x) \\
+    &- \mathcal{W}(B_{t-1}, F_{t-1 \rightarrow t})(x) \rVert_1.
+    \end{aligned}
+\end{equation}
+
+We further measure the overlap among the mask boundary $E_t$, a thresholded depth-edge map, and high temporal-error pixels. Preliminary results on sample clips show that temporal error overlaps with mask boundaries more strongly than with depth edges. Three-way overlap among mask boundary, depth edge, and temporal error is localized rather than broad. This motivates the proposed design: depth is used to guide the trust of boundary refinement, not to explain all flickering pixels.
+
+\section{Experimental Plan}
+\subsection{Dataset}
+The experiments will be conducted on a subset of AI-Hub video inpainting data~\cite{aihub}. The subset will be selected to include diverse camera motion, object size, mask shape, background complexity, and depth discontinuity. Each video will be converted into a consistent frame format, and masks will be aligned with the corresponding frames.
+
+\subsection{Baselines}
+We compare the proposed method with the following variants:
+\begin{itemize}
+    \item ProPainter baseline without post-processing.
+    \item RGB-only temporal blending using optical-flow warping.
+    \item RGB and boundary-aware blending without depth consistency.
+    \item RGB and depth-aware blending without depth-edge preservation.
+    \item Full proposed method with RGB, depth consistency, flow reliability, boundary weighting, and depth-edge preservation.
+    \item Frame-wise pseudo-depth versus sequence-level pseudo-depth.
+\end{itemize}
+
+\subsection{Evaluation Metrics}
+If ground-truth clean frames are available, we report PSNR, SSIM, and LPIPS in the masked region and boundary band. Since temporal stability is the main target, we additionally report temporal warping error:
+\begin{equation}
+    \text{TWE} = \frac{1}{T-1}\sum_{t=2}^{T}\lVert R_t-\mathcal{W}(R_{t-1}, F_{t-1 \rightarrow t}) \rVert_1.
+\end{equation}
+For compact notation, let $\widetilde{R}_t=\mathcal{W}(R_{t-1}, F_{t-1 \rightarrow t})$.
+
+We also report boundary temporal error:
+\begin{equation}
+    \text{BTE} =
+    \frac{1}{T-1}\sum_{t=2}^{T} \frac{1}{|E_t|}
+    \sum_{x \in E_t}\lVert R_t(x)-\widetilde{R}_t(x) \rVert_1.
+\end{equation}
+
+To emphasize difficult geometry, we define a depth-weighted boundary flicker metric:
+\begin{equation}
+    \begin{aligned}
+    \text{DWBF} = \frac{1}{T-1}\sum_{t=2}^{T} \frac{1}{|E_t|}
+    \sum_{x \in E_t} &\lVert \nabla \hat{D}_t(x) \rVert_1 \Delta_t(x),\\
+    \Delta_t(x) &= \lVert R_t(x)-\widetilde{R}_t(x) \rVert_1.
+    \end{aligned}
+\end{equation}
+
+\subsection{Implementation Details}
+ProPainter is used to generate baseline inpainting results. RAFT estimates optical flow at the original resolution or at a resized resolution followed by flow scaling. Depth Anything 3 estimates pseudo-depth maps, and the maps are normalized using robust sequence-level percentiles. The main hyperparameters are the RGB temperature $\tau_{rgb}$, depth temperature $\tau_d$, flow threshold $\tau_f$, boundary width $k$, depth-edge suppression factor $\gamma$, and blending scale $\lambda$. These parameters will be selected on a small validation subset and fixed for the final evaluation.
+
+\subsection{Preliminary Probe}
+As an initial sanity check, we ran the pipeline on three sample clips with 20 frames per clip. ProPainter was used as the baseline inpainting model, Depth Anything 3 Base was used for pseudo-depth estimation, and a fast optical-flow backend was used for the first probe before replacing it with RAFT. The overlap analysis showed that temporal error overlaps with object mask boundaries more strongly than with depth edges. On the same sample clips, the first implementation of depth-aware boundary refinement reduced mean boundary temporal error from 0.03064 to 0.02451 and reduced depth-weighted boundary flicker from 0.00535 to 0.00447. These results are preliminary and are used only to validate the direction of the method before full evaluation.
+
+\section{Expected Results and Discussion}
+We expect the proposed method to reduce temporal flicker most strongly near object mask boundaries. RGB-only blending may improve smooth regions but can introduce ghosting when optical flow crosses an occlusion boundary. In contrast, the depth consistency term should suppress unreliable temporal propagation in such cases. The depth-edge preservation term is expected to reduce over-smoothing across real scene boundaries. The boundary-aware term further limits refinement to regions where artifacts are most visible, reducing the risk of changing stable parts of the frame.
+
+The method has several limitations. Pseudo-depth can be inaccurate for reflective surfaces, transparent objects, textureless regions, and unusual camera motion. If depth estimates flicker across frames, the depth consistency term may become overly conservative. Sequence-level depth estimation is expected to mitigate this issue, and the planned comparison between frame-wise and sequence-level depth will clarify this trade-off.
+
+\section{Conclusion}
+This paper draft presents a depth-aware boundary refinement approach for video object removal. The key idea is to use pseudo-depth consistency and depth-edge preservation as reliability signals for optical-flow-based temporal blending. The method does not claim that depth edges explain all flicker. Instead, it uses pseudo-depth to decide when and where boundary refinement should be trusted. By combining RGB consistency, depth consistency, flow reliability, depth-edge preservation, and mask-boundary weighting, the proposed method aims to reduce boundary flicker while preserving real geometric discontinuities without requiring ground-truth depth or additional training.
+
+\bibliography{depth_aware_temporal_refinement_refs}
+
+\newpage
+\newpage
+
+\onecolumn
+\begin{center}
+    \section*{Summary of this paper}
+    \setcounter{subsection}{0}
+\end{center}
+\noindent\fbox{
+    \parbox{\textwidth}{
+        \begin{quote}
+        \subsection{Problem Setup}
+        Video object removal models reconstruct masked regions in each frame, but temporal artifacts often appear around mask boundaries and occlusion boundaries. The paper focuses on reducing these artifacts in baseline ProPainter outputs without training a new inpainting model.
+        \vspace{0.5\baselineskip}
+
+        \subsection{Novelty}
+        The proposed method uses pseudo-depth consistency from Depth Anything 3 as a confidence signal for boundary refinement. It does not treat depth edges as the sole cause of flicker. Instead, depth cues decide when temporal blending should be trusted and when real geometric boundaries should be preserved.
+        \vspace{0.5\baselineskip}
+
+        \subsection{Algorithms}
+        The pipeline generates baseline inpainting results with ProPainter, estimates pseudo-depth with Depth Anything 3, estimates optical flow with RAFT, warps the previous refined frame, and blends it with the current baseline result using RGB consistency, depth consistency, flow reliability, depth-edge preservation, and mask-boundary weighting.
+        \vspace{0.5\baselineskip}
+
+        \subsection{Experiments}
+        The planned experiments use AI-Hub video inpainting data. The evaluation compares ProPainter, RGB-only temporal blending, boundary-aware blending, depth-aware blending, and the full proposed method. Metrics include temporal warping error, boundary temporal error, and depth-weighted boundary flicker.
+        \vspace{0.5\baselineskip}
+        \end{quote}
+    }
+}
+\thispagestyle{empty}
+\end{document}

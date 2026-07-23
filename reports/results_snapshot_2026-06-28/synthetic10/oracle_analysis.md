@@ -1,0 +1,35 @@
+# Oracle Best-of-Candidates on Existing Synthetic-SAM Outputs
+
+The primary oracle chooses the lowest masked MAE per clip.
+
+| Method | Oracle primary wins | Masked MAE gap to oracle |
+|---|---:|---:|
+| Area-matched dilation | 6 | 0.012245 |
+| Area-matched distance-only | 1 | 0.020741 |
+| Ours-Balanced | 0 | 0.027417 |
+| Temporal union | 2 | 0.059121 |
+| Boundary-only | 1 | 0.063189 |
+
+## Best Method Counts by Metric
+
+| Metric | Best method | Clips |
+|---|---|---:|
+| boundary_te | Temporal union | 5 |
+| boundary_te | Area-matched dilation | 4 |
+| boundary_te | Area-matched distance-only | 1 |
+| extra_mask_ratio | Boundary-only | 10 |
+| masked_mae | Area-matched dilation | 6 |
+| masked_mae | Temporal union | 2 |
+| masked_mae | Area-matched distance-only | 1 |
+| masked_mae | Boundary-only | 1 |
+| masked_psnr | Area-matched dilation | 6 |
+| masked_psnr | Area-matched distance-only | 2 |
+| masked_psnr | Boundary-only | 1 |
+| masked_psnr | Temporal union | 1 |
+| masked_ssim | Area-matched dilation | 5 |
+| masked_ssim | Area-matched distance-only | 2 |
+| masked_ssim | Boundary-only | 1 |
+| masked_ssim | Ours-Balanced | 1 |
+| masked_ssim | Temporal union | 1 |
+| outside_mae | Boundary-only | 9 |
+| outside_mae | Area-matched dilation | 1 |
