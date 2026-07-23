@@ -40,7 +40,6 @@ reports/          Git에 보존할 핵심 표와 clip-level 지표
 reproducibility/  환경과 전체 재현 절차
 scripts/          데이터 준비, 마스크 생성, 평가, 분석 코드
 external/         외부 저장소 복원 안내
-45ED.../          KAIA 논문 소스(생성 파일 제외)
 ```
 
 원본 데이터와 전체 산출물의 역할별 디렉터리 규칙은 [프로젝트 구조](PROJECT_STRUCTURE.md)에 정리되어 있습니다.

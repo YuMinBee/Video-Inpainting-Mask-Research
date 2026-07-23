@@ -28,12 +28,10 @@ configs/
   Shared experiment config files. Keep command presets here when they become stable.
 
 docs/
-  Notes, plans, and paper-facing summaries.
+  Notes, plans, and research summaries.
   Current research log:
     mask_removal_research_log.md
 
-45EDC5BA43BD4CCC93F1F737EEA150AF/
-  KAIA LaTeX template and paper draft files.
 ```
 
 ## Keep `external/` As-Is
@@ -109,7 +107,7 @@ results/metrics/
   Reserved for global metric CSV/JSON files.
 
 results/figures/
-  Reserved for paper-ready figures copied from experiment folders.
+  Reserved for publication-ready figures copied from experiment folders.
 ```
 
 ## Canonical Inputs For Main Experiment
@@ -145,7 +143,7 @@ results/metrics/
 ```
 
 Do not overwrite the probe folders. Treat them as the baseline observation used
-to motivate the paper.
+to motivate the follow-up study.
 
 
 

@@ -1,6 +1,6 @@
-# Reproducibility Guide
+﻿# Reproducibility Guide
 
-This guide documents how to reproduce the selective temporal mask expansion experiments and the paper draft after moving to a new machine.
+This guide documents how to reproduce the selective temporal mask expansion experiments after moving to a new machine.
 
 ## 1. What To Copy
 
@@ -14,7 +14,6 @@ DCG-TR/
   results/
   dataset/davis/
   dataset/040.Inpainting_자동화를_위한_영상_데이터/
-  45EDC5BA43BD4CCC93F1F737EEA150AF/
   reproducibility/
 ```
 
@@ -25,7 +24,6 @@ dataset      542G
 experiments   35G
 results       27G
 external     351M
-paper folder 2.8M
 ```
 
 If storage is limited, keep at least:
@@ -39,30 +37,26 @@ experiments/selective_expansion/full20_evaluation
 experiments/davis2017_val/evaluation
 experiments/paper_tables
 experiments/paper_visualizations
-45EDC5BA43BD4CCC93F1F737EEA150AF/Latex Author Guidelines for KAIA
 ```
 
-This minimal copy preserves the result tables, visualizations, and compiled paper, but it does not allow rerunning ProPainter from raw data unless the datasets and intermediate masks are also copied.
+This minimal copy preserves the result tables and visualizations, but it does not allow rerunning ProPainter from raw data unless the datasets and intermediate masks are also copied.
 
 ## 2. Environments
 
-The experiment used two conda environments:
+The experiment used the following conda environment:
 
 - `convnext`: ProPainter, OpenCV, PyTorch, and experiment scripts.
-- `papertex`: Tectonic LaTeX compiler.
 
 Environment exports are saved here:
 
 ```bash
 reproducibility/convnext_env.yml
-reproducibility/papertex_env.yml
 ```
 
 Create them on the new machine:
 
 ```bash
 conda env create -f reproducibility/convnext_env.yml
-conda env create -f reproducibility/papertex_env.yml
 ```
 
 If the exact CUDA package versions do not solve on the new machine, create a fresh PyTorch environment matching the new CUDA driver, then install the dependencies needed by `external/ProPainter/requirements.txt` and the local scripts. The code was run successfully with two RTX 3090 GPUs.
@@ -88,13 +82,11 @@ Current weight directory size is about `191M`.
 
 ## 4. Current Main Outputs
 
-Paper-ready results:
+Research tables and visualizations:
 
 ```text
 experiments/paper_tables/SELECTIVE_EXPANSION_TABLES.md
 experiments/paper_visualizations/case_panels/INDEX.md
-45EDC5BA43BD4CCC93F1F737EEA150AF/Latex Author Guidelines for KAIA/selective_temporal_mask_expansion_draft.tex
-45EDC5BA43BD4CCC93F1F737EEA150AF/Latex Author Guidelines for KAIA/selective_temporal_mask_expansion_draft.pdf
 ```
 
 Driving results:
@@ -116,26 +108,13 @@ experiments/davis2017_val/evaluation/frame_metrics.csv
 experiments/davis2017_val/evaluation/clip_summary.csv
 ```
 
-## 5. Rebuild Paper Tables And Figures From Existing Metrics
+## 5. Rebuild Tables And Figures From Existing Metrics
 
-If `experiments/` and `results/` are copied, the paper assets can be regenerated without rerunning ProPainter:
+If `experiments/` and `results/` are copied, the research assets can be regenerated without rerunning ProPainter:
 
 ```bash
 python scripts/build_paper_result_tables.py
 python scripts/make_paper_case_visualizations.py
-```
-
-Compile the paper:
-
-```bash
-cd "45EDC5BA43BD4CCC93F1F737EEA150AF/Latex Author Guidelines for KAIA"
-/home/msp/anaconda3/envs/papertex/bin/tectonic selective_temporal_mask_expansion_draft.tex
-```
-
-On a new machine, replace the Tectonic path with the path in the new `papertex` environment:
-
-```bash
-conda run -n papertex tectonic selective_temporal_mask_expansion_draft.tex
 ```
 
 ## 6. Full Reproduction: Driving Clips
@@ -338,15 +317,9 @@ Ours r10 t0.10: residue < boundary-only 21/30, outside < temporal union 30/30
 Ours r10 t0.15: residue < boundary-only 20/30, outside < temporal union 30/30
 ```
 
-Paper PDF:
-
-```text
-45EDC5BA43BD4CCC93F1F737EEA150AF/Latex Author Guidelines for KAIA/selective_temporal_mask_expansion_draft.pdf
-```
-
 ## 9. Notes
 
 - `run_propainter_batch.py` skips completed clips if normalized output frames already exist, so interrupted runs can be resumed.
 - The ProPainter video writer may warn about macro-block resizing. The evaluation uses normalized PNG frames, so this warning is not fatal.
 - The evaluation uses Farneback optical flow for temporal-error metrics. It is CPU-bound and can take several minutes for DAVIS.
-- The exact AI-Hub subset depends on the deterministic order used by `prepare_aihub_validation_subset.py`. To preserve the exact paper numbers, copy `experiments/aihub_subset_20_real` and the generated masks/results rather than reselecting from raw data.
+- The exact AI-Hub subset depends on the deterministic order used by `prepare_aihub_validation_subset.py`. To preserve the exact reported numbers, copy `experiments/aihub_subset_20_real` and the generated masks/results rather than reselecting from raw data.
