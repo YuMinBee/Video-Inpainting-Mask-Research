@@ -1,6 +1,6 @@
 ﻿# Video Inpainting Mask Research
 
-이 저장소는 비디오 객체 제거에서 **분할 마스크와 실제 제거에 필요한 support mask가 같은가**를 검증한 연구 코드와 결과 요약을 담고 있습니다.
+이 저장소는 비디오 객체 제거에서 depth와 temporal 단서를 탐색하고, 최종적으로 **분할 마스크와 실제 제거에 필요한 support mask가 같은가**를 검증한 독립 연구의 코드와 결과 요약을 담고 있습니다. 연구는 Depth Anything 3 기반 경계 안정화에서 출발해 temporal mask refinement로 확장되었으며, 각 단계에서 단순 기준선과 통제 실험을 통해 단서의 실제 기여를 분리했습니다.
 
 현재 결과가 지지하는 결론은 다음과 같습니다.
 
@@ -8,20 +8,22 @@
 
 ## 연구 흐름
 
-1. **문제 제기** — segmentation mask가 removal-support mask로 충분한가?
-2. **실영상 프록시 평가** — AI-Hub 100클립과 DAVIS 30클립에서 BTE, Outside change, Extra mask, residue proxy의 trade-off를 측정했습니다.
-3. **강한 통제 기준선 추가** — 동일 extra-mask 예산의 dilation과 distance-only를 비교해 temporal occupancy의 고유 기여를 분리했습니다.
-4. **Synthetic-GT 검증** — 깨끗한 배경 정답이 있는 10클립에서 실제 복원 MAE/PSNR/SSIM을 측정했습니다.
-5. **오류 원인 분석** — SAM 누락 픽셀의 거리 분포와 mask correction recovery/precision을 분석했습니다.
-6. **대안 단서 검증** — SAM prompt-ensemble의 확률과 불확실성이 누락 영역을 찾는지 같은 예산으로 검증했습니다.
-7. **결론** — temporal occupancy의 단독 효과는 제한적이며, 향후에는 누락된 객체 support와 배경 확장을 구분하는 더 강한 단서가 필요합니다.
+1. **Depth-aware temporal refinement** — Depth Anything 3 pseudo-depth를 optical-flow 기반 경계 blending의 reliability cue로 사용했습니다. AI-Hub 20클립에서 baseline보다 BTE를 낮추고 경계 형태를 보존했지만, temporal error 감소에서는 단순 boundary-only smoothing을 이기지 못했습니다.
+2. **연구 질문 전환** — depth가 모든 flicker를 설명하지 못하고 post-processing만으로는 불완전한 제거 영역을 해결할 수 없음을 확인해, segmentation mask가 removal-support mask로 충분한지 질문을 확장했습니다.
+3. **Temporal mask refinement** — temporal union과 occupancy를 이용해 누락 가능 영역을 선택적으로 확장하고, 보수적인 boundary-only와 공격적인 temporal-union 사이의 trade-off를 측정했습니다.
+4. **실영상 프록시 평가** — AI-Hub 100클립과 DAVIS 30클립에서 BTE, Outside change, Extra mask, residue proxy를 평가했습니다.
+5. **강한 통제 기준선 추가** — 동일 extra-mask 예산의 dilation과 distance-only를 비교해 temporal occupancy의 고유 기여를 분리했습니다.
+6. **Synthetic-GT 검증** — 깨끗한 배경 정답이 있는 10클립에서 실제 복원 MAE/PSNR/SSIM을 측정했습니다.
+7. **오류 원인 및 대안 분석** — SAM 누락 픽셀의 거리 분포와 mask correction 효율을 분석하고, SAM prompt-ensemble uncertainty를 동일 예산에서 검증했습니다.
+8. **결론** — depth는 구조 보존을 위한 보조 단서로 유효했지만, temporal occupancy와 함께 단독 해결책으로는 부족했습니다. 현재 설정에서는 국소 경계 누락에 맞는 단순 dilation이 강한 기준선입니다.
 
-상세한 주장-근거 연결은 [연구 흐름과 해석](docs/RESEARCH_FLOW.md), 전체 실험 기록은 [연구 로그](docs/mask_removal_research_log.md), 재현 명령은 [재현 가이드](reproducibility/README.md)를 참고하십시오.
+초기 depth 실험과 전환 근거는 [Depth-aware temporal refinement 요약](reports/depth_aware_temporal_refinement.md), 전체 주장-근거 연결은 [연구 흐름과 해석](docs/RESEARCH_FLOW.md), 후속 실험 기록은 [연구 로그](docs/mask_removal_research_log.md), 재현 명령은 [재현 가이드](reproducibility/README.md)를 참고하십시오.
 
 ## 핵심 결과
 
 | 평가 | 관찰 | 연구적 해석 |
 |---|---|---|
+| Depth-aware 20 | BTE를 baseline 대비 20.16% 낮췄지만, boundary-only smoothing의 52.88% 감소보다는 작음 | depth는 경계 보존용 reliability cue로는 유효하지만 temporal 안정성 향상의 주된 원인이라고 보기 어려움 |
 | AI-Hub 100 | Ours-Balanced는 Boundary-only보다 BTE가 낮지만 Outside/Extra가 큼 | 보수성과 제거력 사이 trade-off는 개선했으나, 선택성 자체의 독립적 이득은 작음 |
 | 동일 예산 기준선 | Ours-Balanced와 distance-only의 평균 BTE가 거의 같음 | occupancy gate의 고유 기여를 강하게 주장하기 어려움 |
 | DAVIS 30 | Ours-Balanced는 BTE를 낮추지만 Outside change가 증가 | 다른 데이터에서도 같은 trade-off가 재현됨 |

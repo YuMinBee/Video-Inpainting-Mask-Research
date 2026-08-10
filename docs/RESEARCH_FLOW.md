@@ -2,17 +2,36 @@
 
 ## 1. Research question
 
-Video object removal is usually driven by a segmentation mask, but a mask that separates an object from the background is not necessarily large or stable enough to remove the object's complete visual support. This work asks:
+This independent study progressed through two connected phases. The first evaluated whether pseudo-depth could guide temporal post-processing around difficult mask boundaries. The second moved upstream to ask whether the input mask itself provides enough support for complete object removal.
+
+Video object removal is usually driven by a segmentation mask, but a mask that separates an object from the background is not necessarily large or stable enough to remove the object's complete visual support. The final research question is:
 
 > Can temporal occupancy refine an imperfect segmentation mask into a better removal-support mask without causing excessive background modification?
 
-The analysis separates three questions:
+The analysis separates four questions:
 
-1. Does mask expansion improve removal-related metrics?
-2. Is temporal occupancy better than simple geometry at the same mask budget?
-3. Do proxy-metric improvements predict reconstruction quality when clean ground truth is available?
+1. Does pseudo-depth add useful structural information to temporal boundary refinement?
+2. Does mask expansion improve removal-related metrics?
+3. Is temporal occupancy better than simple geometry at the same mask budget?
+4. Do proxy-metric improvements predict reconstruction quality when clean ground truth is available?
 
 ## 2. Experimental sequence
+
+### Stage 0 — Depth-aware temporal boundary refinement
+
+The first phase treated Depth Anything 3 pseudo-depth as a reliability cue for optical-flow-based temporal blending around the object-mask boundary. The depth-aware confidence combined boundary weight, RGB consistency, pseudo-depth consistency, and depth-edge preservation. A boundary-only temporal smoother served as the critical ablation because it removed all RGB/depth confidence gates while retaining the same temporal blending mechanism.
+
+On 20 AI-Hub clips, evaluated with the same flow-warped boundary metrics:
+
+| Method | Boundary TE ↓ | BTE reduction vs baseline | B&D boundary F-score ↑ | B&D change ↓ |
+|---|---:|---:|---:|---:|
+| ProPainter baseline | 0.018322 | 0.00% | 1.0000 | 0.000000 |
+| Depth-aware refinement | 0.014628 | 20.16% | 0.9786 | 0.003118 |
+| Boundary-only smoothing | **0.008634** | **52.88%** | 0.9414 | 0.013151 |
+
+Depth-aware refinement reduced flicker relative to the baseline and preserved baseline contours better than aggressive boundary-only smoothing. However, it beat boundary-only smoothing on frame-level BTE in only 44/776 comparisons (5.67%). Depth edges also had limited overlap with the observed failure region: the three-way intersection of mask boundary, depth edge, and high temporal error occupied 2.89% of the boundary band on average in the initial probe.
+
+**Interpretation:** pseudo-depth is useful as a conservative structural gate, but the evidence does not support depth as the primary explanation for temporal artifacts or depth-aware refinement as the strongest BTE method. This result motivated a shift from stabilizing an already inpainted boundary to improving the removal-support mask supplied to the inpainting model. See the [depth-aware study summary](../reports/depth_aware_temporal_refinement.md) for the ablation and provenance.
 
 ### Stage A — Initial real-video evaluation
 
@@ -73,6 +92,7 @@ Probability and uncertainty from jittered SAM box prompts were evaluated using t
 
 ### Supported
 
+- Pseudo-depth can act as a conservative reliability cue that preserves depth-discontinuity contours during temporal boundary refinement.
 - Imperfect segmentation masks measurably degrade video object removal.
 - Removal quality depends on a trade-off between missing support and collateral background modification.
 - Simple, budget-matched geometric baselines are essential controls.
@@ -81,6 +101,7 @@ Probability and uncertainty from jittered SAM box prompts were evaluated using t
 
 ### Not supported by the current evidence
 
+- Depth edges broadly explain boundary flicker, or depth-aware refinement outperforms ungated boundary smoothing on temporal error.
 - Temporal occupancy consistently outperforms area-matched dilation.
 - Better residue proxies necessarily imply better clean-background reconstruction.
 - Temporal spread predicts the gain over geometry: the measured Pearson and Spearman correlations are close to zero.
@@ -88,6 +109,7 @@ Probability and uncertainty from jittered SAM box prompts were evaluated using t
 
 ## 4. Main limitations
 
+- The early depth-aware study used 20 clips and Farneback optical flow, so it is evidence for a research transition rather than a final RAFT-based benchmark.
 - Synthetic-GT contains 10 clips and its SAM errors are biased toward local boundary shrinkage.
 - Real datasets lack clean background ground truth, so their removal quality is assessed using proxies.
 - Some metrics reward opposite behaviors; no single scalar captures the full removal/collateral-change trade-off.
@@ -106,6 +128,7 @@ Evaluation should report both clean-background reconstruction and budget-matched
 
 ## 6. Evidence locations
 
+- Depth-aware temporal refinement summary: `reports/depth_aware_temporal_refinement.md`
 - Curated, Git-sized tables: `reports/results_snapshot_2026-06-28/`
 - Full experimental narrative: `docs/mask_removal_research_log.md`
 - Commands and expected values: `reproducibility/README.md`

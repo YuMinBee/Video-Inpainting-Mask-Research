@@ -53,7 +53,7 @@ This makes it easy to update or replace ProPainter/DA3 later without losing our
 own experiment logic.
 
 ## Current Experiment Folders
-The active research direction moved from depth-based refinement to mask quality for object removal. The most up-to-date narrative is:
+The active research direction moved from depth-based temporal refinement to mask quality for object removal after the depth ablation showed a stability-preservation trade-off rather than temporal-error superiority. The transition is summarized in `reports/depth_aware_temporal_refinement.md`, and the most up-to-date narrative is:
 
 ```text
 docs/mask_removal_research_log.md
