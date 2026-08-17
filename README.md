@@ -2,7 +2,7 @@
 
 <p align="center">
   <img
-    src="https://raw.githubusercontent.com/YuMinBee/Video-Inpainting-Mask-Research/main/assets/figures/mask_correction_comparison.png"
+    src="https://github.com/YuMinBee/Video-Inpainting-Mask-Research/releases/download/readme-assets-v1/mask_correction_comparison.png"
     alt="동일 면적의 거리 확장과 제안 density-guided 보정 비교"
     width="100%"
   />

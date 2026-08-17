@@ -51,7 +51,7 @@ RGB + raw mask + 경계 거리 + SAM2 정/역방향 시간 정보
 
 <p align="center">
   <img
-    src="https://raw.githubusercontent.com/YuMinBee/Video-Inpainting-Mask-Research/main/assets/figures/mask_correction_comparison.png"
+    src="https://github.com/YuMinBee/Video-Inpainting-Mask-Research/releases/download/readme-assets-v1/mask_correction_comparison.png"
     alt="기존 동일 면적 거리 확장과 제안 방식 비교"
     width="100%"
   />
