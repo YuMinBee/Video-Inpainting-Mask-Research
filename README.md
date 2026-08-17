@@ -1,6 +1,12 @@
 # Budget-Density Temporal Mask Correction for Video Object Removal
 
-![동일 면적의 거리 확장과 제안 density-guided 보정 비교](assets/figures/mask_correction_comparison.png)
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/YuMinBee/Video-Inpainting-Mask-Research/main/assets/figures/mask_correction_comparison.png"
+    alt="동일 면적의 거리 확장과 제안 density-guided 보정 비교"
+    width="100%"
+  />
+</p>
 
 > **같은 `7,191`픽셀을 추가해도 누락 복구율은 기존 거리 확장 `45.4%`,
 > 제안 방식 `60.3%`입니다.** 빨강은 아직 놓친 대상, 초록은 정확히 복구한
@@ -20,7 +26,7 @@
 > distance 혼합·connected decoder·고정 temporal smoothing의 독립 기여는
 > 확인되지 않았습니다.
 
-쉬운 설명은 [교수님 설명용 연구 요약](docs/PROFESSOR_BRIEF.md), 전체 흐름은
+쉬운 설명은 [연구 요약](docs/PROFESSOR_BRIEF.md), 전체 흐름은
 [연구 흐름과 근거 맵](docs/RESEARCH_FLOW.md), 최신 수치와 실패 분석은
 [Experiment 15 결과](reports/learned_budget_density_cv/RESULTS.md)에 있습니다.
 
@@ -152,7 +158,7 @@ RGB + raw mask + distance + frozen bidirectional SAM2 evidence
 
 ## 핵심 문서
 
-- [교수님 설명용 연구 요약](docs/PROFESSOR_BRIEF.md)
+- [연구 요약](docs/PROFESSOR_BRIEF.md)
 - [연구 흐름과 근거 맵](docs/RESEARCH_FLOW.md)
 - [Experiment 15 결과](reports/learned_budget_density_cv/RESULTS.md)
 - [Experiment 15 사전등록](reports/learned_budget_density_cv/PREREGISTRATION.md)

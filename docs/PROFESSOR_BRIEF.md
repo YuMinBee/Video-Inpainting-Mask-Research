@@ -1,4 +1,4 @@
-# 교수님 설명용 연구 요약
+# 연구 요약
 
 ## 한 줄 제목
 
@@ -49,7 +49,13 @@ RGB + raw mask + 경계 거리 + SAM2 정/역방향 시간 정보
            연결성을 지킨 최종 correction mask
 ```
 
-![기존 동일 면적 거리 확장과 제안 방식 비교](../assets/figures/mask_correction_comparison.png)
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/YuMinBee/Video-Inpainting-Mask-Research/main/assets/figures/mask_correction_comparison.png"
+    alt="기존 동일 면적 거리 확장과 제안 방식 비교"
+    width="100%"
+  />
+</p>
 
 위 예시에서 두 방법은 똑같이 `7,191`픽셀을 추가하지만, 기존 거리 확장은
 누락 영역의 `45.4%`, 제안 방식은 `60.3%`를 복구합니다. 빨강은 여전히
@@ -192,7 +198,7 @@ experiment ID로 바꾸고 같은 test를 보지 않은 채 다시 검증한 것
 ## 논문 가능성에 대한 현재 판단
 
 이제는 단순 진단 프로젝트가 아니라 **held-out downstream까지 통과한 학습형
-method prototype**입니다. 교수님께는 신규 방법 후보로 설명할 수 있습니다.
+method prototype**이며 신규 방법 후보로 설명할 수 있습니다.
 다만 논문화의 마지막 관문은 다음 세 가지입니다.
 
 1. 최신 경쟁 refinement/robust-removal baseline과 공정 비교
